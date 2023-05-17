@@ -3,6 +3,7 @@ import struct
 import socket
 import select
 import time
+from threading import Thread
 
 ICMP_ECHO_REQUEST = 8  # ICMP Echo Request type code
 
@@ -75,11 +76,23 @@ def ping_host(host):
             ip, reply_time = reply
             rtt = (reply_time - time.time()) * 1000  # Calculate Round-Trip Time in milliseconds
             print(f"Reply from {ip}: icmp_seq={seq_number} RTT={rtt:.4f}milliseconds")
+            update_watchdog_timer(ip, 10)  # Update the watchdog timer
         else:
             print(f"No reply from {host}: icmp_seq={seq_number}")
 
         seq_number += 1
         time.sleep(1)
+
+
+def update_watchdog_timer(ip, timeout):
+    # Update the watchdog timer by establishing a TCP connection
+    try:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(timeout)
+        sock.connect((ip, 3000))
+        sock.close()
+    except socket.error:
+        pass
 
 
 if __name__ == "__main__":
