@@ -68,13 +68,14 @@ def ping_host(host):
     icmp_socket = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_ICMP)
 
     while True:
+        send_time = time.time()  # Get the send time before sending the ping request
         send_ping_request(dest_addr, seq_number)
         reply = receive_ping_reply(icmp_socket, seq_number, timeout)
 
         if reply:
             ip, reply_time = reply
-            rtt = (reply_time - time.time()) * 1000  # Calculate Round-Trip Time in milliseconds
-            print(f"Reply from {ip}: icmp_seq={seq_number} RTT={rtt:.4f}milliseconds")
+            rtt = (reply_time - send_time) * 1000  # Calculate Round-Trip Time in milliseconds
+            print(f"Reply from {ip}: icmp_seq={seq_number} RTT={rtt:.4f} milliseconds")
         else:
             print(f"No reply from {host}: icmp_seq={seq_number}")
 

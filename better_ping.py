@@ -3,7 +3,7 @@ import struct
 import socket
 import select
 import time
-from threading import Thread
+
 
 ICMP_ECHO_REQUEST = 8  # ICMP Echo Request type code
 
@@ -31,6 +31,7 @@ def send_ping_request(dest_addr, seq_number):
 
     # Send the ICMP packet
     icmp_socket.sendto(header + data, (dest_addr, 1))
+    icmp_socket.close()
 
 
 def receive_ping_reply(icmp_socket, seq_number, timeout):
@@ -50,57 +51,34 @@ def receive_ping_reply(icmp_socket, seq_number, timeout):
             type_code, _, _, received_seq, _ = struct.unpack('!BBHHH', icmp_header)
 
             if type_code == 0 and received_seq == seq_number:
-                # Retrieve the TTL value from the IP header
-                ip_header = struct.unpack('!BBHHHBBH4s4s', packet[:20])
-                ttl = ip_header[5]
-                return addr[0], time.time(), ttl
+                return addr[0], time.time()
 
 
-# Rest of the code remains the same
-
-
-def ping_host(host):
+def ping_host(host, timeout=1):
     try:
         dest_addr = socket.gethostbyname(host)
     except socket.gaierror:
         print(f"Cannot resolve {host}: Unknown host")
         return
 
-    print(f"Pinging {host} [{dest_addr}] with 32 bytes of data:")
-
     seq_number = 1
-    timeout = 1  # seconds
-
-    # Create a raw socket
-    icmp_socket = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_ICMP)
-    icmp_socket.setsockopt(socket.SOL_IP, socket.IP_TTL, 64)
 
     while True:
         send_time = time.time()  # Get the send time before sending the ping request
         send_ping_request(dest_addr, seq_number)
+        icmp_socket = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_ICMP)
         reply = receive_ping_reply(icmp_socket, seq_number, timeout)
+        icmp_socket.close()
 
         if reply:
-            ip, reply_time, ttl = reply
+            ip, reply_time = reply
             rtt = (reply_time - send_time) * 1000  # Calculate Round-Trip Time in milliseconds
-            print(f"Reply from {ip}: icmp_seq={seq_number} RTT={rtt:.4f} milliseconds TTL={ttl}")
-            update_watchdog_timer(ip, 10)  # Update the watchdog timer
+            print(f"Reply from {ip}: icmp_seq={seq_number} RTT={rtt:.4f} milliseconds")
         else:
             print(f"No reply from {host}: icmp_seq={seq_number}")
 
         seq_number += 1
         time.sleep(1)
-
-
-def update_watchdog_timer(ip, timeout):
-    # Update the watchdog timer by establishing a TCP connection
-    try:
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.settimeout(timeout)
-        sock.connect((ip, 3001))
-        sock.close()
-    except socket.error:
-        pass
 
 
 if __name__ == "__main__":
