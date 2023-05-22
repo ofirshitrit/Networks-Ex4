@@ -35,6 +35,7 @@ def start_watchdog():
                 print(f"Reply received in {elapsed_time:.2f} seconds")
                 start_time = time.time()
 
+
         client_socket.close()
 
     watchdog_socket.close()

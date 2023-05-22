@@ -83,6 +83,7 @@ def ping_host(host):
             print(f"Reply from {ip}: icmp_seq={seq_number} time={rtt:.2f}ms ")
         else:
             print(f"No reply from {host}: icmp_seq={seq_number}")
+            break
 
         seq_number += 1
         time.sleep(1)
