@@ -2,11 +2,10 @@ import os
 import struct
 import socket
 import select
+import sys
 import time
-import threading
 
 ICMP_ECHO_REQUEST = 8  # ICMP Echo Request type code
-
 
 def calculate_checksum(data):
     # Helper function to calculate the checksum
@@ -17,8 +16,7 @@ def calculate_checksum(data):
     checksum += checksum >> 16
     return ~checksum & 0xffff
 
-
-def send_ping_request(dest_addr, seq_number):
+def send_ping_request(dest_addr, seq_number, watchdog_socket):
     # Create a raw socket
     icmp_socket = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_ICMP)
     icmp_socket.setsockopt(socket.SOL_IP, socket.IP_TTL, 64)
@@ -32,6 +30,8 @@ def send_ping_request(dest_addr, seq_number):
     # Send the ICMP packet
     icmp_socket.sendto(header + data, (dest_addr, 1))
 
+    # Notify the watchdog that the reply is expected
+    watchdog_socket.sendall(b"Reply arrived")
 
 def receive_ping_reply(icmp_socket, seq_number, timeout):
     start_time = time.time()
@@ -52,7 +52,6 @@ def receive_ping_reply(icmp_socket, seq_number, timeout):
             if type_code == 0 and received_seq == seq_number:
                 return addr[0], time.time()
 
-
 def ping_host(host):
     try:
         dest_addr = socket.gethostbyname(host)
@@ -68,44 +67,33 @@ def ping_host(host):
     # Create a raw socket
     icmp_socket = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_ICMP)
 
+    # Connect to the watchdog
+    watchdog_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    watchdog_socket.connect(("localhost", 3000))
+
     while True:
-        send_time = time.time()  # Get the send time before sending the ping request
-        send_ping_request(dest_addr, seq_number)
+        send_ping_request(dest_addr, seq_number, watchdog_socket)
         reply = receive_ping_reply(icmp_socket, seq_number, timeout)
 
         if reply:
             ip, reply_time = reply
-            rtt = (reply_time - send_time) * 1000  # Calculate Round-Trip Time in milliseconds
-            print(f"Reply from {ip}: icmp_seq={seq_number} RTT={rtt:.4f} milliseconds")
+            rtt = (reply_time - time.time()) * 1000  # Calculate Round-Trip Time in milliseconds
+            print(f"Reply from {ip}: icmp_seq={seq_number} time={rtt:.2f}ms")
         else:
             print(f"No reply from {host}: icmp_seq={seq_number}")
 
         seq_number += 1
         time.sleep(1)
 
+    watchdog_socket.close()
 
-def watchdog_timer():
-    timeout = 10  # 10 seconds
-    start_time = time.time()
+def main():
+    if len(sys.argv) != 2:
+        print("Usage: python better_ping.py <ip>")
+        return
 
-    while True:
-        elapsed_time = time.time() - start_time
-        if elapsed_time > timeout:
-            print(f"Server {host} cannot be reached.")
-            os._exit(0)  # Exit the program
-
-        time.sleep(0.001)
-
-
-if __name__ == "__main__":
-    host = "google.com"
-
-    # Create and start the watchdog timer thread
-    watchdog_thread = threading.Thread(target=watchdog_timer)
-    watchdog_thread.start()
-
-    # Start pinging the host
+    host = sys.argv[1]
     ping_host(host)
 
-    # Wait for the watchdog thread to finish
-    watchdog_thread.join()
+if __name__ == "__main__":
+    main()
