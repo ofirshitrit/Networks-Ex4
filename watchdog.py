@@ -1,29 +1,22 @@
+import os
 import time
-import threading
-import subprocess
+import socket
 
-def start_ping_watchdog(host, ping_interval, watchdog_timeout):
-    def ping_thread():
-        while True:
-            subprocess.run(["ping", "-c", "5", host], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            time.sleep(ping_interval)
+def watchdog_timer():
+    timeout = 10  # 10 seconds
+    start_time = time.time()
 
-    def watchdog_timer_expired():
-        pass
+    while True:
+        elapsed_time = time.time() - start_time
+        if elapsed_time > timeout:
+            print(f"Server {host} cannot be reached.")
+            os._exit(0)  # Exit the program
 
-    ping_thread = threading.Thread(target=ping_thread)
-    watchdog_timer = threading.Timer(watchdog_timeout, watchdog_timer_expired)
+        time.sleep(0.001)
 
-    ping_thread.start()
-    watchdog_timer.start()
-
-    try:
-        while True:
-            time.sleep(1)
-    except KeyboardInterrupt:
-        watchdog_timer.cancel()
-        ping_thread.join()
 
 if __name__ == "__main__":
-    start_ping_watchdog("google.com", 5, 10)
+    host = "google.com"
 
+    # Create and start the watchdog timer thread
+    watchdog_timer()

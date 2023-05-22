@@ -3,7 +3,7 @@ import struct
 import socket
 import select
 import time
-
+import threading
 
 ICMP_ECHO_REQUEST = 8  # ICMP Echo Request type code
 
@@ -31,7 +31,6 @@ def send_ping_request(dest_addr, seq_number):
 
     # Send the ICMP packet
     icmp_socket.sendto(header + data, (dest_addr, 1))
-    icmp_socket.close()
 
 
 def receive_ping_reply(icmp_socket, seq_number, timeout):
@@ -54,21 +53,25 @@ def receive_ping_reply(icmp_socket, seq_number, timeout):
                 return addr[0], time.time()
 
 
-def ping_host(host, timeout=1):
+def ping_host(host):
     try:
         dest_addr = socket.gethostbyname(host)
     except socket.gaierror:
         print(f"Cannot resolve {host}: Unknown host")
         return
 
+    print(f"Pinging {host} [{dest_addr}] with 32 bytes of data:")
+
     seq_number = 1
+    timeout = 1  # seconds
+
+    # Create a raw socket
+    icmp_socket = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_ICMP)
 
     while True:
         send_time = time.time()  # Get the send time before sending the ping request
         send_ping_request(dest_addr, seq_number)
-        icmp_socket = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_ICMP)
         reply = receive_ping_reply(icmp_socket, seq_number, timeout)
-        icmp_socket.close()
 
         if reply:
             ip, reply_time = reply
@@ -81,5 +84,28 @@ def ping_host(host, timeout=1):
         time.sleep(1)
 
 
+def watchdog_timer():
+    timeout = 10  # 10 seconds
+    start_time = time.time()
+
+    while True:
+        elapsed_time = time.time() - start_time
+        if elapsed_time > timeout:
+            print(f"Server {host} cannot be reached.")
+            os._exit(0)  # Exit the program
+
+        time.sleep(0.001)
+
+
 if __name__ == "__main__":
-    ping_host("google.com")
+    host = "google.com"
+
+    # Create and start the watchdog timer thread
+    watchdog_thread = threading.Thread(target=watchdog_timer)
+    watchdog_thread.start()
+
+    # Start pinging the host
+    ping_host(host)
+
+    # Wait for the watchdog thread to finish
+    watchdog_thread.join()

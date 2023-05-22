@@ -2,10 +2,10 @@ import os
 import struct
 import socket
 import select
+import sys
 import time
 
 ICMP_ECHO_REQUEST = 8  # ICMP Echo Request type code
-
 
 def calculate_checksum(data):
     # Helper function to calculate the checksum
@@ -15,7 +15,6 @@ def calculate_checksum(data):
     checksum = (checksum >> 16) + (checksum & 0xffff)
     checksum += checksum >> 16
     return ~checksum & 0xffff
-
 
 def send_ping_request(dest_addr, seq_number):
     # Create a raw socket
@@ -30,7 +29,6 @@ def send_ping_request(dest_addr, seq_number):
 
     # Send the ICMP packet
     icmp_socket.sendto(header + data, (dest_addr, 1))
-
 
 def receive_ping_reply(icmp_socket, seq_number, timeout):
     start_time = time.time()
@@ -51,7 +49,6 @@ def receive_ping_reply(icmp_socket, seq_number, timeout):
             if type_code == 0 and received_seq == seq_number:
                 return addr[0], time.time()
 
-
 def ping_host(host):
     try:
         dest_addr = socket.gethostbyname(host)
@@ -68,20 +65,26 @@ def ping_host(host):
     icmp_socket = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_ICMP)
 
     while True:
-        send_time = time.time()  # Get the send time before sending the ping request
         send_ping_request(dest_addr, seq_number)
         reply = receive_ping_reply(icmp_socket, seq_number, timeout)
 
         if reply:
             ip, reply_time = reply
-            rtt = (reply_time - send_time) * 1000  # Calculate Round-Trip Time in milliseconds
-            print(f"Reply from {ip}: icmp_seq={seq_number} RTT={rtt:.4f} milliseconds")
+            rtt = (reply_time - time.time()) * 1000  # Calculate Round-Trip Time in milliseconds
+            print(f"Reply from {ip}: icmp_seq={seq_number} time={rtt:.2f}ms")
         else:
             print(f"No reply from {host}: icmp_seq={seq_number}")
 
         seq_number += 1
         time.sleep(1)
 
+def main():
+    if len(sys.argv) != 2:
+        print("Usage: python ping.py <ip>")
+        return
+
+    host = sys.argv[1]
+    ping_host(host)
 
 if __name__ == "__main__":
-    ping_host("google.com")
+    main()
