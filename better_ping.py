@@ -35,22 +35,22 @@ def send_ping_request(dest_addr, seq_number):
 
 def receive_ping_reply(icmp_socket, seq_number, timeout):
     start_time = time.time()
-
     while True:
         # Check if timeout has occurred
         elapsed_time = time.time() - start_time
         if elapsed_time > timeout:
             return None
-
         ready, _, _ = select.select([icmp_socket], [], [], timeout - elapsed_time)
         if ready:
             # Receive the ICMP reply packet
             packet, addr = icmp_socket.recvfrom(1024)
             icmp_header = packet[20:28]
             type_code, _, _, received_seq, _ = struct.unpack('!BBHHH', icmp_header)
-
             if type_code == 0 and received_seq == seq_number:
-                return addr[0], time.time()
+                # Retrieve the TTL value from the IP header
+                ip_header = struct.unpack('!BBHHHBBH4s4s', packet[:20])
+                ttl = ip_header[5]
+                return addr[0], time.time(), ttl
 
 
 def ping_host(host):
@@ -74,9 +74,9 @@ def ping_host(host):
         reply = receive_ping_reply(icmp_socket, seq_number, timeout)
 
         if reply:
-            ip, reply_time = reply
+            ip, reply_time , ttl = reply
             rtt = (reply_time - send_time) * 1000  # Calculate Round-Trip Time in milliseconds
-            print(f"Reply from {ip}: icmp_seq={seq_number} RTT={rtt:.4f} milliseconds")
+            print(f"Reply from {ip}: icmp_seq={seq_number} RTT={rtt:.4f} milliseconds , ttl={ttl}")
         else:
             print(f"No reply from {host}: icmp_seq={seq_number}")
 
