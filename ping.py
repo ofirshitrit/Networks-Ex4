@@ -44,10 +44,13 @@ def receive_ping_reply(icmp_socket, seq_number, timeout):
             # Receive the ICMP reply packet
             packet, addr = icmp_socket.recvfrom(1024)
             icmp_header = packet[20:28]
-            type_code, _, _, received_seq, _ = struct.unpack('!BBHHH', icmp_header)
+            type_code, _, _, received_seq, ttl = struct.unpack('!BBHHH', icmp_header)
 
             if type_code == 0 and received_seq == seq_number:
-                return addr[0], time.time()
+                return addr[0], time.time(), ttl
+
+    return None
+
 
 def ping_host(host):
     try:
@@ -65,13 +68,14 @@ def ping_host(host):
     icmp_socket = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_ICMP)
 
     while True:
+        send_time = time.time()  # Get the send time before sending the ping request
         send_ping_request(dest_addr, seq_number)
         reply = receive_ping_reply(icmp_socket, seq_number, timeout)
 
         if reply:
-            ip, reply_time = reply
-            rtt = (reply_time - time.time()) * 1000  # Calculate Round-Trip Time in milliseconds
-            print(f"Reply from {ip}: icmp_seq={seq_number} time={rtt:.2f}ms")
+            ip, reply_time , ttl = reply
+            rtt = (reply_time - send_time) * 1000  # Calculate Round-Trip Time in milliseconds
+            print(f"Reply from {ip}: icmp_seq={seq_number} , time={rtt:.2f} ms , ttl={ttl}")
         else:
             print(f"No reply from {host}: icmp_seq={seq_number}")
 

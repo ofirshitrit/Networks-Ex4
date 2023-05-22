@@ -16,7 +16,28 @@ def calculate_checksum(data):
     checksum += checksum >> 16
     return ~checksum & 0xffff
 
-def send_ping_request(dest_addr, seq_number, watchdog_socket):
+
+def receive_ping_reply(icmp_socket, seq_number, timeout):
+    start_time = time.time()
+    while True:
+        # Check if timeout has occurred
+        elapsed_time = time.time() - start_time
+        if elapsed_time > timeout:
+            return None
+        ready, _, _ = select.select([icmp_socket], [], [], timeout - elapsed_time)
+        if ready:
+            # Receive the ICMP reply packet
+            packet, addr = icmp_socket.recvfrom(1024)
+            icmp_header = packet[20:28]
+            type_code, _, _, received_seq, _ = struct.unpack('!BBHHH', icmp_header)
+            if type_code == 0 and received_seq == seq_number:
+                # Retrieve the TTL value from the IP header
+                ip_header = struct.unpack('!BBHHHBBH4s4s', packet[:20])
+                ttl = ip_header[5]
+                return addr[0], time.time(), ttl
+
+
+def send_ping_request(dest_addr, seq_number, watchdog_socket, timeout):
     # Create a raw socket
     icmp_socket = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_ICMP)
     icmp_socket.setsockopt(socket.SOL_IP, socket.IP_TTL, 64)
@@ -33,24 +54,26 @@ def send_ping_request(dest_addr, seq_number, watchdog_socket):
     # Notify the watchdog that the reply is expected
     watchdog_socket.sendall(b"Reply arrived")
 
-def receive_ping_reply(icmp_socket, seq_number, timeout):
-    start_time = time.time()
+    start_time = time.time()  # Define start_time here
 
     while True:
         # Check if timeout has occurred
         elapsed_time = time.time() - start_time
         if elapsed_time > timeout:
-            return None
+            return None, None
 
         ready, _, _ = select.select([icmp_socket], [], [], timeout - elapsed_time)
         if ready:
             # Receive the ICMP reply packet
             packet, addr = icmp_socket.recvfrom(1024)
             icmp_header = packet[20:28]
-            type_code, _, _, received_seq, _ = struct.unpack('!BBHHH', icmp_header)
+            type_code, code, checksum, received_seq, received_ttl = struct.unpack('!BBHHH', icmp_header)
 
             if type_code == 0 and received_seq == seq_number:
-                return addr[0], time.time()
+                return addr[0], received_ttl, time.time()
+
+    return None, None, None
+
 
 def ping_host(host):
     try:
@@ -72,20 +95,22 @@ def ping_host(host):
     watchdog_socket.connect(("localhost", 3000))
 
     while True:
-        send_ping_request(dest_addr, seq_number, watchdog_socket)
-        reply = receive_ping_reply(icmp_socket, seq_number, timeout)
+        send_time = time.time()  # Get the send time before sending the ping request
+        send_ping_request(dest_addr, seq_number, watchdog_socket, timeout)
+        ip, ttl, reply_time = receive_ping_reply(icmp_socket, seq_number, timeout)
 
-        if reply:
-            ip, reply_time = reply
-            rtt = (reply_time - time.time()) * 1000  # Calculate Round-Trip Time in milliseconds
-            print(f"Reply from {ip}: icmp_seq={seq_number} time={rtt:.2f}ms")
+        if ip and ttl and reply_time:
+            rtt = (reply_time - send_time) * 1000  # Calculate Round-Trip Time in milliseconds
+            print(f"Reply from {ip}: icmp_seq={seq_number}, ttl={ttl}, time={rtt:.2f} ms")
         else:
             print(f"No reply from {host}: icmp_seq={seq_number}")
+            break  # No reply, stop the program
 
         seq_number += 1
         time.sleep(1)
 
     watchdog_socket.close()
+
 
 def main():
     if len(sys.argv) != 2:
@@ -94,6 +119,7 @@ def main():
 
     host = sys.argv[1]
     ping_host(host)
+
 
 if __name__ == "__main__":
     main()
