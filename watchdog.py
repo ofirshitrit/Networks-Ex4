@@ -1,44 +1,33 @@
-import socket
+import os
+import signal
 import time
+import socket
+import sys
 
-def start_watchdog():
-    timeout = 10  # seconds
+WATCHDOG_TIMEOUT = 10  # Timeout value in seconds
+server_ip = ""  # Global variable to hold the server IP
 
-    # Create a socket with TCP protocol
-    watchdog_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    watchdog_socket.bind(("localhost", 3000))
-    watchdog_socket.listen(1)
+def handle_watchdog_signal(signum, frame):
+    global server_ip
+    print(f"Server {server_ip} cannot be reached.")
+    sys.exit(0)
 
-    print("Watchdog started. Listening on port 3000...")
+def main():
+    global server_ip
+
+    signal.signal(signal.SIGUSR1, handle_watchdog_signal)
+
+    # Get the IP address of the server (localhost)
+    server_ip = socket.gethostbyname("localhost")
 
     while True:
-        # Accept incoming connection
-        client_socket, _ = watchdog_socket.accept()
         start_time = time.time()
+        time.sleep(WATCHDOG_TIMEOUT)
+        elapsed_time = time.time() - start_time
 
-        while True:
-            try:
-                data = client_socket.recv(1024).decode()
-                if not data:
-                    break
-            except socket.error:
-                break
-
-            elapsed_time = time.time() - start_time
-
-            if elapsed_time > timeout:
-                print("Timeout occurred. Closing connection...")
-                client_socket.close()
-                break
-
-            if data == "Reply arrived":
-                print(f"Reply received in {elapsed_time:.2f} seconds")
-                start_time = time.time()
-
-
-        client_socket.close()
-
-    watchdog_socket.close()
+        # Check if the elapsed time exceeds the timeout
+        if elapsed_time >= WATCHDOG_TIMEOUT:
+            handle_watchdog_signal(signal.SIGUSR1, None)
 
 if __name__ == "__main__":
-    start_watchdog()
+    main()
