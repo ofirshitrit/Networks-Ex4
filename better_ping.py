@@ -8,6 +8,7 @@ from subprocess import Popen
 import signal
 
 ICMP_ECHO_REQUEST = 8  # ICMP Echo Request type code
+WATCHDOG_PORT = 3000  # Port number for the TCP connection
 
 def calculate_checksum(data):
     # Helper function to calculate the checksum
@@ -83,6 +84,23 @@ def ping_host(host, watchdog_pid):
 
         time.sleep(1)
 
+
+def establish_tcp_connection():
+    # Create a TCP socket
+    tcp_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+
+    # Connect to the watchdog process
+    server_address = ("localhost", WATCHDOG_PORT)
+    tcp_socket.connect(server_address)
+
+    return tcp_socket
+
+def keep_alive(tcp_socket):
+    # Send periodic messages to keep the TCP connection alive
+    while True:
+        tcp_socket.sendall(b"PING")
+        time.sleep(1)
+
 def main():
     if len(sys.argv) != 2:
         print("Usage: python better_ping.py <ip>")
@@ -98,8 +116,14 @@ def main():
         Popen([python_executable, "watchdog.py"])
         sys.exit(0)
 
+    # Establish TCP connection with the watchdog process
+    tcp_socket = establish_tcp_connection()
+
     # Parent process - Run the ping_host function
     ping_host(host, watchdog_pid)
+
+    # Close the TCP connection before exiting
+    tcp_socket.close()
 
 if __name__ == "__main__":
     main()
