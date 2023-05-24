@@ -8,7 +8,6 @@ from subprocess import Popen
 import signal
 
 ICMP_ECHO_REQUEST = 8  # ICMP Echo Request type code
-WATCHDOG_PORT = 3000  # Port number for the TCP connection
 
 def calculate_checksum(data):
     # Helper function to calculate the checksum
@@ -90,7 +89,7 @@ def establish_tcp_connection():
     tcp_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
     # Connect to the watchdog process
-    server_address = ("localhost", WATCHDOG_PORT)
+    server_address = ("localhost", 3000)
     tcp_socket.connect(server_address)
 
     return tcp_socket
