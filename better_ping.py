@@ -90,7 +90,11 @@ def establish_tcp_connection():
 
     # Connect to the watchdog process
     server_address = ("localhost", 3000)
-    tcp_socket.connect(server_address)
+    try:
+        tcp_socket.connect(server_address)
+    except ConnectionRefusedError:
+        print("Connection refused by the server.")
+        sys.exit(1)
 
     return tcp_socket
 
@@ -118,8 +122,11 @@ def main():
     # Establish TCP connection with the watchdog process
     tcp_socket = establish_tcp_connection()
 
-    # Parent process - Run the ping_host function
-    ping_host(host, watchdog_pid)
+    try:
+        # Parent process - Run the ping_host function
+        ping_host(host, watchdog_pid)
+    except KeyboardInterrupt:
+        pass
 
     # Close the TCP connection before exiting
     tcp_socket.close()

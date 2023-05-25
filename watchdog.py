@@ -6,7 +6,7 @@ import sys
 from multiprocessing import Process
 
 WATCHDOG_TIMEOUT = 10  # Timeout value in seconds
-WATCHDOG_PORT = 4000  # Port number for the TCP connection
+WATCHDOG_PORT = 3000  # Port number for the TCP connection
 
 def handle_watchdog_signal(signum, frame):
     global server_ip
